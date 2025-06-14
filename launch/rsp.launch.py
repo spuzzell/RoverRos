@@ -20,8 +20,9 @@ from ament_index_python.packages import get_package_share_directory
 
 # Core launch functionality
 from launch import LaunchDescription
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, Command
 from launch.actions import DeclareLaunchArgument
+
 
 # To launch ROS 2 nodes
 from launch_ros.actions import Node
@@ -34,13 +35,15 @@ def generate_launch_description():
 
     # Get the value of 'use_sim_time' from command-line or default
     use_sim_time = LaunchConfiguration('use_sim_time')
+    use_ros2_control = LaunchConfiguration('use_ros2_control')
 
     # Locate the package and robot xacro file
     pkg_path = os.path.join(get_package_share_directory('roverproject'))
     xacro_file = os.path.join(pkg_path,'description','robot.urdf.xacro')
 
     # Process the xacro file to generate the robot's URDF
-    robot_description_config = xacro.process_file(xacro_file)
+    #robot_description_config = xacro.process_file(xacro_file)
+    robot_description_config = Command(['xacro ', xacro_file, ' use_ros2_control:=', use_ros2_control, ' sim_mode:=', use_sim_time])
     
     
     # Set parameters for the robot_state_publisher node

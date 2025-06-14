@@ -1,6 +1,6 @@
 """
 ###########################################################################################################################################################
-Launch File: simulation_launch.py
+Launch File: launch_rover.launch.py
 
 Description:
 This ROS 2 launch file sets up a complete simulation environment using Gazebo and ROS-GZ bridge.
@@ -18,13 +18,17 @@ It performs the following actions:
 import os
 
 # Get the path to a package's share directory
-from ament_index_python.packages import get_package_share_directory
+
+from ament_index_python.packages import get_package_share_directory 
 
 # Core launch functionalities
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, LogInfo
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, LogInfo, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
+from launch.substitutions import Command
+from launch.actions import RegisterEventHandler
+from launch.event_handlers import OnProcessStart
 
 # For launching ROS 2 nodes
 from launch_ros.actions import Node
@@ -35,6 +39,8 @@ def generate_launch_description():
 
 	# Name of the package containing the robot description and related resources
 	package_name='roverproject'
+
+	# Location of the meshes used in rviz2  
 	roverproject_mesh_path = os.path.join(get_package_share_directory(package_name), 'meshes')
 
 
@@ -45,8 +51,8 @@ def generate_launch_description():
 			get_package_share_directory(package_name),'launch','rsp.launch.py'
 		)]),
 		launch_arguments={
-			'use_sim_time': 'true', 
-			'use_ros2_control': 'false'
+			'use_sim_time': 'false', 
+			'use_ros2_control': 'true'
 		}.items()
 	)
 
@@ -75,68 +81,18 @@ def generate_launch_description():
 					('/cmd_vel_out','/diff_cont/cmd_vel')]
 	)
 
+	robot_description = Command(['ros2 param get --hide-type /robot_state_publisher robot_description'])
+	controller_params_file = os.path.join(get_package_share_directory(package_name),'config','my_controllers.yaml')
 
-
-	# Path to the default Gazebo world file
-	default_world = os.path.join(
-		get_package_share_directory(package_name),
-		'worlds',
-		'empty.world'
-		
-	)    
-
-
-	# Declare a launch argument to allow overriding the world file from the command line
-	world = LaunchConfiguration('world')
-	world_arg = DeclareLaunchArgument(
-		'world', 
-		default_value=default_world, 
-		description='World to load'
-		)
-
-
-	# Launch Gazebo (gz_sim) with the selected world file and enable exit-on-shutdown
-	gazebo = IncludeLaunchDescription(
-		PythonLaunchDescriptionSource([os.path.join(
-			get_package_share_directory('ros_gz_sim'), 'launch', 'gz_sim.launch.py'
-		)]),
-		launch_arguments={
-			'gz_args': ['-r -v1 ', world],  # -r = run immediately, -v4 = verbose level 4
-			'on_exit_shutdown': 'true'
-		}.items()
+	controller_manager = Node(
+		package="controller_manager",
+		executable="ros2_control_node",
+		parameters=[{'robot_description': robot_description},
+                    controller_params_file],
 	)
 
-	# Spawn the robot into the simulation using the robot_description topic
-	spawn_entity = Node(
-		package='ros_gz_sim', 
-		executable='create',
-		arguments=['-topic', 'robot_description',
-				   '-name', 'my_bot',
-		           '-z', '0.3'     # Spawn 10 cm above the ground to avoid clipping
-		],
-	    output='screen'
-	)    
+	delayed_controller_manager = TimerAction(period=3.0, actions=[controller_manager])
 
-
-	# Path to the parameter file for ros_gz_bridge
-	bridge_params = os.path.join(
-		get_package_share_directory(package_name),
-		'config','gz_bridge.yaml'
-	)
-
-	# Launch the parameter bridge for simulation-to-ROS topics
-	ros_gz_bridge = Node(
-		package="ros_gz_bridge", 
-		executable="parameter_bridge",
-		arguments=['--ros-args','-p',f'config_file:={bridge_params}',]
-	)
-
-	# Bridge Gazebo image topic to ROS for the robot's camera
-	ros_gz_image_bridge = Node(
-		package="ros_gz_image", 
-		executable="image_bridge", 
-		arguments=["/camera/image_raw"]
-	)
 
 	diff_drive_spawner = Node(
 		package="controller_manager",
@@ -144,11 +100,25 @@ def generate_launch_description():
 		arguments=["diff_cont"],
 	)
 
+	delayed_diff_drive_spawner = RegisterEventHandler(
+        event_handler=OnProcessStart(
+            target_action=controller_manager,
+            on_start=[diff_drive_spawner],
+        )
+    )
+
 	joint_broad_spawner = Node(
 		package="controller_manager",
 		executable="spawner",
 		arguments=["joint_broad"],
 	)
+
+	delayed_joint_broad_spawner = RegisterEventHandler(
+        event_handler=OnProcessStart(
+            target_action=controller_manager,
+            on_start=[joint_broad_spawner],
+        )
+    )
 
 	# Combine and return all launch elements
 	return LaunchDescription([
@@ -157,11 +127,7 @@ def generate_launch_description():
         joystick,
         twist_mux,
         twist_stamper,
-        world_arg,
-        gazebo,
-        spawn_entity,
-        ros_gz_bridge,
-        ros_gz_image_bridge,
-        diff_drive_spawner,
-        joint_broad_spawner
+		delayed_controller_manager,
+        delayed_diff_drive_spawner,
+        delayed_joint_broad_spawner
     ])
