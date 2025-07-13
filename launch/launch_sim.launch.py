@@ -28,18 +28,32 @@ from launch.substitutions import LaunchConfiguration
 
 # For launching ROS 2 nodes
 from launch_ros.actions import Node
+from launch.actions import LogInfo
 
+banner = LogInfo(msg="""
+				 
+░▒▓███████▓▒░ ░▒▓██████▓▒░ ░▒▓███████▓▒░      ░▒▓███████▓▒░ ░▒▓██████▓▒░░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░▒▓███████▓▒░  
+░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░             ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░ 
+░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░             ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒▒▓█▓▒░░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░ 
+░▒▓███████▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░       ░▒▓███████▓▒░░▒▓█▓▒░░▒▓█▓▒░░▒▓█▓▒▒▓█▓▒░░▒▓██████▓▒░ ░▒▓███████▓▒░  
+░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░      ░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░ ░▒▓█▓▓█▓▒░ ░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░ 
+░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░      ░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░ ░▒▓█▓▓█▓▒░ ░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░ 
+░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░░▒▓███████▓▒░       ░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░   ░▒▓██▓▒░  ░▒▓████████▓▒░▒▓█▓▒░░▒▓█▓▒░ 
+                                                                                                                 
+Rover Simulation Launch
+(Gazebo + ROS 2 Integration)
+
+""")
 
 
 def generate_launch_description():
 
-	# Name of the package containing the robot description and related resources
+	# Set the package name and mesh path for the rover project
 	package_name='roverproject'
 	roverproject_mesh_path = os.path.join(get_package_share_directory(package_name), 'meshes')
 
 
-	# Include the robot state publisher launch file (rsp.launch.py)
-    # Pass arguments to use simulation time and disable ros2_control
+	# Launch the robot state publisher with simulation time enabled and ros2_control disabled
 	rsp = IncludeLaunchDescription(
 		PythonLaunchDescriptionSource([os.path.join(
 			get_package_share_directory(package_name),'launch','rsp.launch.py'
@@ -50,6 +64,7 @@ def generate_launch_description():
 		}.items()
 	)
 
+	# Launch joystick control with simulation time enabled
 	joystick = IncludeLaunchDescription(
 		PythonLaunchDescriptionSource([os.path.join(
 			get_package_share_directory(package_name),'launch','joystick.launch.py'
@@ -59,6 +74,7 @@ def generate_launch_description():
 		}.items()
 	)
 
+	# Configure and launch the twist_mux node for velocity command multiplexing
 	twist_mux_params = os.path.join(get_package_share_directory(package_name),'config','twist_mux.yaml')
 	twist_mux = Node(
 		package="twist_mux",
@@ -67,6 +83,7 @@ def generate_launch_description():
 		remappings=[('/cmd_vel_out','/diff_cont/cmd_vel_unstamped')]
 	)
 
+	# Launch the twist_stamper node to add timestamps to velocity commands
 	twist_stamper = Node(
 		package='twist_stamper',
 		executable='twist_stamper',
@@ -75,18 +92,15 @@ def generate_launch_description():
 					('/cmd_vel_out','/diff_cont/cmd_vel')]
 	)
 
-
-
-	# Path to the default Gazebo world file
+	# Set the path to the default Gazebo world file
 	default_world = os.path.join(
 		get_package_share_directory(package_name),
 		'worlds',
 		'empty.world'
-		
 	)    
 
 
-	# Declare a launch argument to allow overriding the world file from the command line
+	# Allow the world file to be overridden via a launch argument
 	world = LaunchConfiguration('world')
 	world_arg = DeclareLaunchArgument(
 		'world', 
@@ -152,7 +166,7 @@ def generate_launch_description():
 
 	# Combine and return all launch elements
 	return LaunchDescription([
-		#banner,
+		banner,
         rsp,
         joystick,
         twist_mux,
