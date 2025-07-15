@@ -11,8 +11,8 @@ controller_manager:
 
 diff_cont:
   ros__parameters:
-    left_wheel_names: ['Fleft_wheel_joint', 'Rleft_wheel_joint']
-    right_wheel_names: ['Fright_wheel_joint', 'Rright_wheel_joint']
+    left_wheel_names: ['Fleft_wheel_joint']
+    right_wheel_names: ['Fright_wheel_joint']
 
     wheel_separation: 0.358
     wheel_radius: 0.08
